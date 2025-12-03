@@ -16,6 +16,19 @@ import time
 from pyrogram import Client, filters, idle
 from pyrogram.types import Message
 from pyrogram.errors import BadMsgNotification
+from threading import Thread
+from flask import Flask
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is alive", 200
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+Thread(target=run).start()
 
 import logging
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
