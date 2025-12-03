@@ -1,6 +1,2 @@
 pyrogram==2.0.37
 tgcrypto
-motor
-pymongo
-fastapi
-uvicorn[standard]
