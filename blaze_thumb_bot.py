@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-blaze_thumb_bot.py — Normal Mode (simple, fast)
+blaze_thumb_bot.py — Normal Mode (fixed idle bug)
 Usage:
   - Set env: BOT_TOKEN, API_ID, API_HASH
   - Optional env: TARGET_THUMB_KB (KB, default 2000), AGGRESSIVE_COMPRESSION=1, AUTO_DELETE=1
@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 import time
 
-from pyrogram import Client, filters
+from pyrogram import Client, filters, idle
 from pyrogram.types import Message
 from pyrogram.errors import BadMsgNotification
 
@@ -69,15 +69,21 @@ def compress_thumb_ffmpeg(src: str, dst: str, max_kb: int = 2000, aggressive: bo
         scale = "min(1280,iw):min(720,ih)"
         q = 3
 
-    subprocess.run(["ffmpeg", "-y", "-i", src, "-vf", f"scale={scale}:force_original_aspect_ratio=decrease", "-qscale:v", str(q), tmp],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", src, "-vf", f"scale={scale}:force_original_aspect_ratio=decrease", "-qscale:v", str(q), tmp],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
 
     quality = q
     # loop to reduce quality if still too large
     while Path(tmp).exists() and Path(tmp).stat().st_size > max_kb * 1024 and quality <= 40:
         quality += 3
-        subprocess.run(["ffmpeg", "-y", "-i", tmp, "-qscale:v", str(quality), str(dst)],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp, "-qscale:v", str(quality), str(dst)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
         if Path(dst).exists() and Path(dst).stat().st_size <= max_kb * 1024:
             break
         # move dst back to tmp for next iteration if exists
@@ -100,7 +106,7 @@ async def cmd_start(_, m: Message):
 @app.on_message(filters.video)
 async def on_video(_, m: Message):
     pending[m.chat.id] = m
-    await m.reply_text("✅ Video received. Now send the image you want as the new thumbnail.")
+    await m.reply_text("✅ Video received. Now send me the image you want as the new thumbnail.")
 
 @app.on_message(filters.photo | filters.document)
 async def on_thumb(client: Client, m: Message):
@@ -147,11 +153,19 @@ async def on_thumb(client: Client, m: Message):
 def start_bot():
     logger.info("Starting Normal Mode Thumb Bot...")
     tries = 0
-    while tries < 2:
+    max_retries = 2
+    while tries < max_retries:
         try:
             app.start()
             logger.info("Bot started.")
-            app.idle()
+            try:
+                idle()  # blocks until termination signal
+            finally:
+                # ensure client stops cleanly
+                try:
+                    app.stop()
+                except Exception:
+                    pass
             break
         except BadMsgNotification:
             logger.warning("BadMsgNotification: removing session and retrying...")
